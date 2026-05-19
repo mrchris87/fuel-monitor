@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⛽ Local Fuel Price Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #080808; color: #f0f0f0; font-family: 'DM Mono', monospace; min-height: 100vh; padding-bottom: 60px; }
+
+  header {
+    border-bottom: 1px solid #161616; padding: 20px 28px 16px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  }
+  .live-dot {
+    display: inline-block; width: 10px; height: 10px; background: #4ade80;
+    border-radius: 50%; box-shadow: 0 0 12px #4ade80; animation: pulse 2s infinite;
+    margin-right: 10px; vertical-align: middle;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  .header-title { color: #4ade80; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; }
+  .header-sub { color: #252525; font-size: 11px; margin-top: 3px; padding-left: 20px; }
+  .header-right { text-align: right; }
+  .refresh-btn {
+    background: none; border: 1px solid #1c1c1c; border-radius: 6px;
+    color: #333; font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 5px 12px; cursor: pointer; transition: all 0.15s; margin-bottom: 4px;
+  }
+  .refresh-btn:hover { border-color: #4ade80; color: #4ade80; }
+  .last-updated { color: #222; font-size: 10px; }
+
+  main { padding: 24px 28px; max-width: 1200px; margin: 0 auto; }
+  .section-label {
+    color: #333; font-size: 11px; letter-spacing: 0.08em;
+    padding-bottom: 8px; border-bottom: 1px solid #141414;
+    margin-bottom: 16px; margin-top: 32px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+
+  .card {
+    background: #0d0d0d; border: 1px solid #1c1c1c;
+    border-radius: 12px; overflow: hidden; transition: border-color 0.2s;
+  }
+  .card:hover { border-color: #2a2a2a; }
+  .card.error { border-color: #1a0808; }
+
+  .card-header { padding: 14px 16px 11px; border-bottom: 1px solid #111; }
+  .card-name { font-size: 13px; font-weight: 600; color: #e0e0e0; line-height: 1.3; margin-bottom: 3px; }
+  .card-addr { font-size: 10px; color: #303030; }
+
+  .card-prices { padding: 12px 16px; }
+  .price-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid #0f0f0f;
+  }
+  .price-row:last-child { border-bottom: none; }
+  .fuel-label { font-size: 11px; color: #3a3a3a; }
+
+  .fuel-price { font-size: 22px; font-weight: 600; color: #4ade80; letter-spacing: -0.02em; }
+  .fuel-price sup { font-size: 12px; font-weight: 400; }
+  .fuel-price.na { font-size: 13px; color: #222; }
+  .fuel-price.loading { color: #1a1a1a; animation: blink 1.2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .fuel-price.up { color: #f87171; }
+  .fuel-price.down { color: #4ade80; }
+
+  .change-pill {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle;
+  }
+  .change-pill.up { background: #2a0808; color: #f87171; }
+  .change-pill.down { background: #082a08; color: #4ade80; }
+
+  .card-footer {
+    padding: 8px 16px 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .updated-time { font-size: 10px; color: #1e1e1e; }
+  .detail-link { font-size: 10px; color: #222; text-decoration: none; }
+  .detail-link:hover { color: #4ade80; }
+
+  .setup-banner {
+    background: #0a1a0a; border: 1px solid #1a3a1a; border-radius: 10px;
+    padding: 16px 20px; margin-bottom: 8px; font-size: 12px;
+    color: #4a6a4a; line-height: 1.7;
+  }
+  .setup-banner strong { color: #4ade80; }
+  .setup-banner code {
+    background: #0d0d0d; border: 1px solid #1c1c1c; border-radius: 4px;
+    padding: 2px 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: #aaa;
+  }
+
+  footer { text-align: center; color: #161616; font-size: 10px; padding: 24px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <span class="live-dot"></span>
+    <span class="header-title">LOCAL FUEL PRICE DASHBOARD</span>
+    <div class="header-sub">Hope Valley &amp; Chapel en le Frith area · S33 7ZA</div>
+  </div>
+  <div class="header-right">
+    <button class="refresh-btn" onclick="loadAll()">↻ Refresh all</button>
+    <div class="last-updated" id="lastUpdated">Loading...</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ⚠️ SETUP NOTICE — remove this div once your worker URL is set below -->
+  <div class="setup-banner" id="setupBanner">
+    <strong>⚙️ One-time setup needed:</strong> Open this HTML file, find the line near the top of the
+    &lt;script&gt; that says <code>WORKER_URL = ''</code> and paste your Cloudflare Worker URL between
+    the quotes. It will look like <code>https://fuel-proxy.yourname.workers.dev</code>.
+    Then re-upload to Bubble and prices will load. <a href="#" onclick="document.getElementById('setupBanner').style.display='none';return false;" style="color:#4ade80;margin-left:8px;">Dismiss</a>
+  </div>
+
+  <div class="section-label">BAMFORD &amp; HATHERSAGE AREA</div>
+  <div class="grid" id="grid-bamford"></div>
+
+  <div class="section-label">CHAPEL EN LE FRITH AREA</div>
+  <div class="grid" id="grid-chapel"></div>
+
+</main>
+
+<footer>Prices from UK Government Fuel Finder scheme · Updates every 5 minutes</footer>
+
+<script>
+// ────────────────────────────────────────────────────────────────────
+// STEP 1: Paste your Cloudflare Worker URL here after deploying it
+// Example: 'https://fuel-proxy.yourname.workers.dev'
+const WORKER_URL = 'https://fuelworker.mrchristopherreid.workers.dev';
+// ────────────────────────────────────────────────────────────────────
+
+const STATION_GROUPS = {
+  bamford: [
+    {
+      name: 'Sickleholme Service Station',
+      addr: 'Hathersage Road, Bamford · S33 0EB',
+      postcode: 'S330EB',
+      keywords: ['sickleholme', 'ascona', 'bamford'],
+      detailUrl: 'https://fuelcosts.co.uk/stations/texaco-bamford-s330eb',
+    },
+    {
+      name: 'Hathersage Service Station',
+      addr: 'Station Road, Hathersage · S32 1BB',
+      postcode: 'S321BB',
+      keywords: ['hathersage', 'ascona'],
+      detailUrl: 'https://fuelcosts.co.uk/stations/texaco-hathersage-s321bb',
+    },
+    {
+      name: 'Hope Garage',
+      addr: 'Castleton Road, Hope Valley · S33 6RZ',
+      postcode: 'S336RZ',
+      keywords: ['hope', 'garage'],
+      detailUrl: 'https://fuelcosts.co.uk/stations/hope-garage-hope-valley-s336rz',
+    },
+  ],
+  chapel: [
+    {
+      name: 'Morrisons',
+      addr: 'Market Street, Chapel en le Frith · SK23 0HZ',
+      postcode: 'SK230HZ',
+      keywords: ['morrisons', 'market'],
+      detailUrl: 'https://fuelcosts.co.uk/fuel-prices/chapel-en-le-frith',
+    },
+    {
+      name: 'EG Fickle Mermaid',
+      addr: 'Foresters Way, Chapel en le Frith · SK23 0RB',
+      postcode: 'SK230RB',
+      keywords: ['fickle', 'mermaid', 'eg', 'foresters'],
+      detailUrl: 'https://fuelcosts.co.uk/stations/8b1af0b7a38ffde129550f7086a2b02f97c1955bf554a6974a1612da452a98bd',
+    },
+  ],
+};
+
+const FUELS = [
+  { key: 'E10', label: 'Petrol (E10)' },
+  { key: 'B7',  label: 'Diesel (B7)'  },
+  { key: 'E5',  label: 'Super (E5)'   },
+];
+
+const prevPrices = {};
+
+function slugify(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function buildCards() {
+  Object.entries(STATION_GROUPS).forEach(([area, stations]) => {
+    const grid = document.getElementById('grid-' + area);
+    grid.innerHTML = '';
+    stations.forEach(s => {
+      const id = slugify(s.name + s.postcode);
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.id = 'card-' + id;
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="card-name">${s.name}</div>
+          <div class="card-addr">${s.addr}</div>
+        </div>
+        <div class="card-prices">
+          ${FUELS.map(f => `
+            <div class="price-row">
+              <span class="fuel-label">${f.label}</span>
+              <span class="fuel-price loading" id="p-${id}-${f.key}">···</span>
+            </div>
+          `).join('')}
+        </div>
+        <div class="card-footer">
+          <span class="updated-time" id="upd-${id}">Waiting...</span>
+          <a class="detail-link" href="${s.detailUrl}" target="_blank">Details ↗</a>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  });
+}
+
+function findMatch(stations, keywords) {
+  return stations.find(s => {
+    const text = ((s.name || '') + ' ' + (s.address || '')).toLowerCase();
+    return keywords.some(kw => text.includes(kw));
+  });
+}
+
+async function fetchStation(station) {
+  if (!WORKER_URL) return null;
+
+  const id = slugify(station.name + station.postcode);
+  let e10 = null, b7 = null, e5 = null;
+
+  for (const fuel of ['E10', 'B7']) {
+    try {
+      const url = `${WORKER_URL}?postcode=${station.postcode}&fuel=${fuel}&radius=1&limit=10`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) continue;
+
+      const match = findMatch(data, station.keywords) || data[0];
+      if (!match?.prices) continue;
+
+      e10 = e10 ?? (match.prices.E10 ? parseFloat(match.prices.E10) : null);
+      b7  = b7  ?? (match.prices.B7  ? parseFloat(match.prices.B7)  : null);
+      e5  = e5  ?? (match.prices.E5  ? parseFloat(match.prices.E5)  : null);
+    } catch(e) {}
+  }
+
+  if (!e10 && !b7) return null;
+  return { E10: e10, B7: b7, E5: e5 };
+}
+
+function updateCard(station, data) {
+  const id = slugify(station.name + station.postcode);
+  const card = document.getElementById('card-' + id);
+  if (!card) return;
+  card.classList.remove('error');
+
+  const prev = prevPrices[id] || {};
+
+  FUELS.forEach(f => {
+    const el = document.getElementById(`p-${id}-${f.key}`);
+    if (!el) return;
+    const price = data?.[f.key];
+    const oldPrice = prev[f.key];
+
+    if (price && price > 0) {
+      let changeHtml = '';
+      let cls = '';
+      if (oldPrice && oldPrice !== price) {
+        const dir = price > oldPrice ? 'up' : 'down';
+        const diff = Math.abs(price - oldPrice).toFixed(1);
+        changeHtml = `<span class="change-pill ${dir}">${dir === 'up' ? '▲' : '▼'}${diff}p</span>`;
+        cls = ' ' + dir;
+      }
+      el.className = `fuel-price${cls}`;
+      el.innerHTML = `${price.toFixed(1)}<sup>p</sup>${changeHtml}`;
+    } else {
+      el.className = 'fuel-price na';
+      el.textContent = '—';
+    }
+  });
+
+  if (data) prevPrices[id] = data;
+
+  const updEl = document.getElementById('upd-' + id);
+  if (updEl) {
+    if (!data) {
+      updEl.textContent = !WORKER_URL ? 'Worker URL not set' : 'Not reporting';
+      card.classList.add('error');
+    } else {
+      updEl.textContent = 'Live · ' + new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+    }
+  }
+}
+
+async function loadAll() {
+  if (!WORKER_URL) {
+    document.getElementById('lastUpdated').textContent = 'Worker URL needed — see setup banner';
+    return;
+  }
+  document.getElementById('setupBanner').style.display = 'none';
+  document.getElementById('lastUpdated').textContent = 'Refreshing...';
+
+  const all = [...STATION_GROUPS.bamford, ...STATION_GROUPS.chapel];
+  await Promise.all(all.map(async station => {
+    const data = await fetchStation(station);
+    updateCard(station, data);
+  }));
+
+  document.getElementById('lastUpdated').textContent =
+    'Refreshed ' + new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+}
+
+buildCards();
+loadAll();
+setInterval(loadAll, 5 * 60 * 1000);
+</script>
+</body>
+</html>
