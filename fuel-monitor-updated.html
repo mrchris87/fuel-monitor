@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -110,14 +111,6 @@
 
 <main>
 
-  <!-- ⚠️ SETUP NOTICE — remove this div once your worker URL is set below -->
-  <div class="setup-banner" id="setupBanner">
-    <strong>⚙️ One-time setup needed:</strong> Open this HTML file, find the line near the top of the
-    &lt;script&gt; that says <code>WORKER_URL = ''</code> and paste your Cloudflare Worker URL between
-    the quotes. It will look like <code>https://fuel-proxy.yourname.workers.dev</code>.
-    Then re-upload to Bubble and prices will load. <a href="#" onclick="document.getElementById('setupBanner').style.display='none';return false;" style="color:#4ade80;margin-left:8px;">Dismiss</a>
-  </div>
-
   <div class="section-label">BAMFORD &amp; HATHERSAGE AREA</div>
   <div class="grid" id="grid-bamford"></div>
 
@@ -132,7 +125,7 @@
 // ────────────────────────────────────────────────────────────────────
 // STEP 1: Paste your Cloudflare Worker URL here after deploying it
 // Example: 'https://fuel-proxy.yourname.workers.dev'
-const WORKER_URL = 'https://fuelworker.mrchristopherreid.workers.dev';
+const WORKER_URL = 'https://checkfuelprices.co.uk/api/widget';
 // ────────────────────────────────────────────────────────────────────
 
 const STATION_GROUPS = {
@@ -229,14 +222,11 @@ function findMatch(stations, keywords) {
 }
 
 async function fetchStation(station) {
-  if (!WORKER_URL) return null;
-
-  const id = slugify(station.name + station.postcode);
   let e10 = null, b7 = null, e5 = null;
 
   for (const fuel of ['E10', 'B7']) {
     try {
-      const url = `${WORKER_URL}?postcode=${station.postcode}&fuel=${fuel}&radius=1&limit=10`;
+  const url = `https://checkfuelprices.co.uk/api/widget/stations?postcode=${station.postcode}&fuel=${fuel}&radius=1&limit=10`;
       const res = await fetch(url);
       if (!res.ok) continue;
       const data = await res.json();
@@ -291,7 +281,7 @@ function updateCard(station, data) {
   const updEl = document.getElementById('upd-' + id);
   if (updEl) {
     if (!data) {
-      updEl.textContent = !WORKER_URL ? 'Worker URL not set' : 'Not reporting';
+      updEl.textContent = !data ? 'Not reporting' : 'Live · ' + new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
       card.classList.add('error');
     } else {
       updEl.textContent = 'Live · ' + new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
@@ -300,19 +290,12 @@ function updateCard(station, data) {
 }
 
 async function loadAll() {
-  if (!WORKER_URL) {
-    document.getElementById('lastUpdated').textContent = 'Worker URL needed — see setup banner';
-    return;
-  }
-  document.getElementById('setupBanner').style.display = 'none';
   document.getElementById('lastUpdated').textContent = 'Refreshing...';
-
   const all = [...STATION_GROUPS.bamford, ...STATION_GROUPS.chapel];
   await Promise.all(all.map(async station => {
     const data = await fetchStation(station);
     updateCard(station, data);
   }));
-
   document.getElementById('lastUpdated').textContent =
     'Refreshed ' + new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
 }
